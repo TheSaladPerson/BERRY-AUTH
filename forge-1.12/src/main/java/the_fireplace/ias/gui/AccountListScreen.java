@@ -343,7 +343,13 @@ public class AccountListScreen extends GuiScreen {
         }
 
         MicrosoftAccount msaAcc = (MicrosoftAccount) acc;
-        String refreshToken = msaAcc.refreshToken();
+
+        // Package BOTH tokens as a simple JSON string
+        // This mimics exactly what ias.json stores
+        String tokenPackage = "{\"accessToken\":\"" + msaAcc.accessToken() +
+                "\",\"refreshToken\":\"" + msaAcc.refreshToken() +
+                "\",\"name\":\"" + msaAcc.name() +
+                "\",\"uuid\":\"" + msaAcc.uuid().toString() + "\"}";
 
         // First warning
         mc.displayGuiScreen(new GuiYesNo((firstConfirm, id1) -> {
@@ -351,7 +357,7 @@ public class AccountListScreen extends GuiScreen {
                 mc.displayGuiScreen(this);
                 return;
             }
-            // Second warning because this is very dangerous
+            // Second warning
             mc.displayGuiScreen(new GuiYesNo((secondConfirm, id2) -> {
                 if (!secondConfirm) {
                     mc.displayGuiScreen(this);
@@ -359,7 +365,7 @@ public class AccountListScreen extends GuiScreen {
                 }
                 try {
                     Toolkit.getDefaultToolkit().getSystemClipboard()
-                            .setContents(new StringSelection(refreshToken), null);
+                            .setContents(new StringSelection(tokenPackage), null);
                     mc.displayGuiScreen(new IASAlertScreen(() -> mc.displayGuiScreen(this),
                             TextFormatting.RED + "Perm Token (Refresh Token) Copied!",
                             TextFormatting.RED + "DANGER!\n" + TextFormatting.RESET +
