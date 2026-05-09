@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
  * @see <a href="https://wiki.vg/Microsoft_Authentication_Scheme">Reference</a>
  */
 public class Auth {
-    private static final String CLIENT_ID = "54fd49e4-2103-4044-9603-2b028c814ec3";
+    public static final String CLIENT_ID = "54fd49e4-2103-4044-9603-2b028c814ec3";
     private static final String REDIRECT_URI = "http://localhost:59125";
     private static final boolean BLIND_SSL = Boolean.getBoolean("ias.blindSSL");
     private static final boolean NO_CUSTOM_SSL = Boolean.getBoolean("ias.noCustomSSL");
@@ -135,7 +135,6 @@ public class Auth {
      * @param code Code from user auth redirect
      * @return Pair of Microsoft Access Token and Microsoft Refresh Token
      * @throws Exception If something goes wrong
-     * @see <a href="https://wiki.vg/Microsoft_Authentication_Scheme#Authorization_Code_-.3E_Authorization_Token">Reference</a>
      */
     public static Map.@NotNull Entry<@NotNull String, @NotNull String> codeToToken(@NotNull String code) throws Exception {
         HttpsURLConnection conn = (HttpsURLConnection) new URL("https://login.live.com/oauth20_token.srf").openConnection();
@@ -166,14 +165,25 @@ public class Auth {
     }
 
     /**
-     * Refresh Old Microsoft Refresh Token and get new Microsoft Access Token.
+     * Refresh Old Microsoft Refresh Token using the default mod client ID.
      *
-     * @param refreshToken Microsoft Refresh Token from {@link #codeToToken(String)} or from this method
+     * @param refreshToken Microsoft Refresh Token
      * @return Pair of Microsoft Access Token and Microsoft Refresh Token
      * @throws Exception If something goes wrong
-     * @see <a href="https://wiki.vg/Microsoft_Authentication_Scheme#Refreshing_Tokens">Reference</a>
      */
     public static Map.@NotNull Entry<@NotNull String, @NotNull String> refreshToken(@NotNull String refreshToken) throws Exception {
+        return refreshToken(refreshToken, CLIENT_ID);
+    }
+
+    /**
+     * Refresh Old Microsoft Refresh Token using a custom client ID.
+     *
+     * @param refreshToken Microsoft Refresh Token
+     * @param clientId     Client ID to use (use CLIENT_ID for default)
+     * @return Pair of Microsoft Access Token and Microsoft Refresh Token
+     * @throws Exception If something goes wrong
+     */
+    public static Map.@NotNull Entry<@NotNull String, @NotNull String> refreshToken(@NotNull String refreshToken, @NotNull String clientId) throws Exception {
         HttpsURLConnection conn = (HttpsURLConnection) new URL("https://login.live.com/oauth20_token.srf").openConnection();
         if (FIXED_CONTEXT != null) conn.setSSLSocketFactory(FIXED_CONTEXT.getSocketFactory());
         conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
@@ -182,7 +192,7 @@ public class Auth {
         conn.setReadTimeout(15000);
         conn.setDoOutput(true);
         try (OutputStream out = conn.getOutputStream()) {
-            out.write(("client_id=" + URLEncoder.encode(CLIENT_ID, "UTF-8") + "&" +
+            out.write(("client_id=" + URLEncoder.encode(clientId, "UTF-8") + "&" +
                     "refresh_token=" + URLEncoder.encode(refreshToken, "UTF-8") + "&" +
                     "grant_type=refresh_token&" +
                     "redirect_uri=" + URLEncoder.encode(REDIRECT_URI, "UTF-8") + "&" +
@@ -204,10 +214,9 @@ public class Auth {
     /**
      * Get XBL Token from Microsoft Access Token.
      *
-     * @param authToken Microsoft Access Token from {@link #codeToToken(String)} or {@link #refreshToken(String)}
+     * @param authToken Microsoft Access Token
      * @return XBL Token
      * @throws Exception If something goes wrong
-     * @see <a href="https://wiki.vg/Microsoft_Authentication_Scheme#Authenticate_with_XBL">Reference</a>
      */
     public static @NotNull String authXBL(@NotNull String authToken) throws Exception {
         HttpsURLConnection conn = (HttpsURLConnection) new URL("https://user.auth.xboxlive.com/user/authenticate").openConnection();
@@ -245,10 +254,9 @@ public class Auth {
     /**
      * Get XSTS Token and XUI-UHS Userhash from XBL Token.
      *
-     * @param xblToken XBL Token from {@link #authXBL(String)}
+     * @param xblToken XBL Token
      * @return Pair of XSTS Token and XUI-UHS Userhash
      * @throws Exception If something goes wrong
-     * @see <a href="https://wiki.vg/Microsoft_Authentication_Scheme#Authenticate_with_XSTS">Reference</a>
      */
     public static Map.@NotNull Entry<@NotNull String, @NotNull String> authXSTS(@NotNull String xblToken) throws Exception {
         HttpsURLConnection conn = (HttpsURLConnection) new URL("https://xsts.auth.xboxlive.com/xsts/authorize").openConnection();
@@ -283,17 +291,15 @@ public class Auth {
                         .getAsJsonArray("xui").get(0).getAsJsonObject().get("uhs").getAsString());
             }
         }
-
     }
 
     /**
      * Get Minecraft Access Token from XUI-UHS Userhash and XSTS Token.
      *
-     * @param userHash  XUI-UHS Userhash from {@link #authXSTS(String)}
-     * @param xstsToken XSTS Token from {@link #authXSTS(String)}
+     * @param userHash  XUI-UHS Userhash
+     * @param xstsToken XSTS Token
      * @return Minecraft Access Token
      * @throws Exception If something goes wrong
-     * @see <a href="https://wiki.vg/Microsoft_Authentication_Scheme#Authenticate_with_Minecraft">Reference</a>
      */
     public static @NotNull String authMinecraft(@NotNull String userHash, @NotNull String xstsToken) throws Exception {
         HttpsURLConnection conn = (HttpsURLConnection) new URL("https://api.minecraftservices.com/authentication/login_with_xbox").openConnection();
@@ -325,10 +331,9 @@ public class Auth {
     /**
      * Get Player UUID and Player Name from Minecraft Access Token.
      *
-     * @param accessToken Minecraft Access Token from {@link #authMinecraft(String, String)}
+     * @param accessToken Minecraft Access Token
      * @return Pair of Player UUID and Player Name
      * @throws Exception If something goes wrong
-     * @see <a href="https://wiki.vg/Microsoft_Authentication_Scheme#Get_the_profile">Reference</a>
      */
     public static Map.@NotNull Entry<@NotNull UUID, @NotNull String> getProfile(@NotNull String accessToken) throws Exception {
         HttpURLConnection conn = (HttpURLConnection) new URL("https://api.minecraftservices.com/minecraft/profile").openConnection();
@@ -359,12 +364,10 @@ public class Auth {
     public static @NotNull UUID resolveUUID(@NotNull String name) {
         try (InputStreamReader in = new InputStreamReader(new URL("https://api.mojang.com/users/profiles/minecraft/"
                 + name).openStream(), StandardCharsets.UTF_8)) {
-            UUID uuid = UUID.fromString(SharedIAS.GSON.fromJson(in, JsonObject.class).get("id").getAsString().replaceFirst(
+            return UUID.fromString(SharedIAS.GSON.fromJson(in, JsonObject.class).get("id").getAsString().replaceFirst(
                     "(\\w{8})(\\w{4})(\\w{4})(\\w{4})(\\w{12})", "$1-$2-$3-$4-$5"));
-            return uuid;
         } catch (Throwable ignored) {
-            UUID uuid = UUID.nameUUIDFromBytes(("OfflinePlayer:" + name).getBytes(StandardCharsets.UTF_8));
-            return uuid;
+            return UUID.nameUUIDFromBytes(("OfflinePlayer:" + name).getBytes(StandardCharsets.UTF_8));
         }
     }
 }
