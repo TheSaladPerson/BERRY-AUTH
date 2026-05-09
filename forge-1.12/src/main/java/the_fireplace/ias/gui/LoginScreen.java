@@ -40,6 +40,7 @@ public class LoginScreen extends GuiScreen {
     private final MicrosoftAuthCallback callback = new MicrosoftAuthCallback();
     private GuiTextField username;
     private GuiTextField tokenField;
+    private GuiTextField clientIdField;
     private GuiButton offline;
     private GuiButton microsoft;
     private GuiButton addTempToken;
@@ -63,20 +64,27 @@ public class LoginScreen extends GuiScreen {
         offline.enabled = false;
         addButton(new GuiButton(1, this.width / 2 + 2, this.height - 28, 150, 20, I18n.format("gui.cancel")));
 
+        // Username field
         username = new GuiTextField(2, fontRenderer, this.width / 2 - 100, height / 2 - 65, 200, 20);
         username.setMaxStringLength(16);
 
+        // Microsoft button
         addButton(microsoft = new GuiButton(3, this.width / 2 - 75, this.height / 2 - 40, 150, 20,
                 I18n.format("ias.loginGui.microsoft")));
 
-        tokenField = new GuiTextField(4, fontRenderer, this.width / 2 - 100, height / 2 - 5, 200, 20);
-        tokenField.setMaxStringLength(Integer.MAX_VALUE); // Increased max length just in case
+        // Token field - extra wide and unlimited length
+        tokenField = new GuiTextField(4, fontRenderer, this.width / 2 - 150, height / 2 - 5, 300, 20);
+        tokenField.setMaxStringLength(Integer.MAX_VALUE);
 
-        // Two buttons side by side for temp and perm token import
+        // Temp and Perm token buttons side by side
         addButton(addTempToken = new GuiButton(5, this.width / 2 - 102, this.height / 2 + 20, 100, 20,
                 "Add Temp Token"));
         addButton(addPermToken = new GuiButton(6, this.width / 2 + 2, this.height / 2 + 20, 100, 20,
                 "Add Perm Token"));
+
+        // Client ID field (optional)
+        clientIdField = new GuiTextField(8, fontRenderer, this.width / 2 - 100, height / 2 + 55, 200, 20);
+        clientIdField.setMaxStringLength(64);
 
         addTempToken.enabled = false;
         addPermToken.enabled = false;
@@ -95,7 +103,8 @@ public class LoginScreen extends GuiScreen {
     @Override
     protected void mouseClicked(int mouseX, int mouseY, int mouseButton) throws IOException {
         if (username.mouseClicked(mouseX, mouseY, mouseButton) ||
-                tokenField.mouseClicked(mouseX, mouseY, mouseButton)) return;
+                tokenField.mouseClicked(mouseX, mouseY, mouseButton) ||
+                clientIdField.mouseClicked(mouseX, mouseY, mouseButton)) return;
         super.mouseClicked(mouseX, mouseY, mouseButton);
     }
 
@@ -104,23 +113,35 @@ public class LoginScreen extends GuiScreen {
         drawDefaultBackground();
         drawCenteredString(fontRenderer, this.title, this.width / 2, 5, -1);
 
-        // Nickname label above username field
+        // Nickname label
         drawCenteredString(fontRenderer, I18n.format("ias.loginGui.nickname"),
                 this.width / 2, height / 2 - 78, -1);
 
-        // Divider between Microsoft button and token field
-        drawCenteredString(fontRenderer, "--- Or paste Temp/Perm token below ---",
+        // Divider
+        drawCenteredString(fontRenderer, "--- Or paste token / JSON below ---",
                 this.width / 2, height / 2 - 18, 0xFF808080);
 
+        // Client ID label
+        drawCenteredString(fontRenderer, "Client ID (optional, only for refresh tokens from other apps)",
+                this.width / 2, height / 2 + 43, 0xFF808080);
+
         if (state != null) {
-            drawCenteredString(fontRenderer, state, width / 2, height / 2 + 55, 0xFFFF9900);
+            drawCenteredString(fontRenderer, state, width / 2, height / 2 + 85, 0xFFFF9900);
             drawCenteredString(fontRenderer,
                     SharedIAS.LOADING[(int) ((System.currentTimeMillis() / 50) % SharedIAS.LOADING.length)],
-                    width / 2, height / 2 + 65, 0xFFFF9900);
+                    width / 2, height / 2 + 95, 0xFFFF9900);
         }
 
         username.drawTextBox();
         tokenField.drawTextBox();
+        clientIdField.drawTextBox();
+
+        // Placeholder text for client ID field
+        if (clientIdField.getText().isEmpty() && !clientIdField.isFocused()) {
+            drawString(fontRenderer, "Default: " + Auth.CLIENT_ID,
+                    clientIdField.x + 4, clientIdField.y + (clientIdField.height - 8) / 2, 0xFF555555);
+        }
+
         super.drawScreen(mx, my, delta);
 
         if (offline.isMouseOver()) {
@@ -134,10 +155,14 @@ public class LoginScreen extends GuiScreen {
         }
         if (addPermToken.isMouseOver()) {
             drawHoveringText(fontRenderer.listFormattedStringToWidth(
-                    TextFormatting.RED + "Perm Token (Full Account Data):\n" +
-                            TextFormatting.RESET + "Never expires until password changed.\n" +
-                            "Grants permanent account access!\n" +
-                            TextFormatting.RED + "Only use if you trust the source!", 200), mx, my);
+                    TextFormatting.RED + "Perm Token / Refresh Token:\n" +
+                            TextFormatting.RESET + "Accepts either:\n" +
+                            "- Raw refresh token (starts with M.)\n" +
+                            "- Full JSON from 'Copy Perm Token'\n\n" +
+                            "Will automatically detect the format\n" +
+                            "and fetch all account info.\n\n" +
+                            "Set Client ID below if the token\n" +
+                            "came from a different app.", 200), mx, my);
         }
     }
 
@@ -147,7 +172,9 @@ public class LoginScreen extends GuiScreen {
             mc.displayGuiScreen(prev);
             return;
         }
-        if (username.textboxKeyTyped(c, key) || tokenField.textboxKeyTyped(c, key)) return;
+        if (username.textboxKeyTyped(c, key) ||
+                tokenField.textboxKeyTyped(c, key) ||
+                clientIdField.textboxKeyTyped(c, key)) return;
         super.keyTyped(c, key);
     }
 
@@ -162,11 +189,13 @@ public class LoginScreen extends GuiScreen {
         offline.enabled = !username.getText().trim().isEmpty() && state == null;
         username.setEnabled(state == null);
         tokenField.setEnabled(state == null);
+        clientIdField.setEnabled(state == null);
         microsoft.enabled = state == null;
         addTempToken.enabled = !tokenField.getText().trim().isEmpty() && state == null;
         addPermToken.enabled = !tokenField.getText().trim().isEmpty() && state == null;
         username.updateCursorCounter();
         tokenField.updateCursorCounter();
+        clientIdField.updateCursorCounter();
     }
 
     private void loginMicrosoft() {
@@ -249,11 +278,8 @@ public class LoginScreen extends GuiScreen {
     }
 
     private void loginPermToken() {
-        // *** THE FIX: Grab the text BEFORE showing the confirmation GUI ***
         final String tokenData = tokenField.getText().trim();
-        if (tokenData.isEmpty()) {
-            return; // Don't do anything if the field is empty
-        }
+        if (tokenData.isEmpty()) return;
 
         mc.displayGuiScreen(new GuiYesNo((confirmed, id) -> {
             if (!confirmed) {
@@ -266,46 +292,84 @@ public class LoginScreen extends GuiScreen {
 
             SharedIAS.EXECUTOR.execute(() -> {
                 try {
-                    // Use the 'tokenData' variable we saved earlier,
-                    // not the (now empty) text field
-                    state = "Importing Perm Token...";
+                    // Try to extract refresh token from input
+                    String refreshToken = null;
 
-                    com.google.gson.JsonObject json = ru.vidtu.ias.SharedIAS.GSON
-                            .fromJson(tokenData, com.google.gson.JsonObject.class);
+                    // Check if it's JSON (from Copy Perm Token)
+                    if (tokenData.startsWith("{")) {
+                        try {
+                            com.google.gson.JsonObject json = ru.vidtu.ias.SharedIAS.GSON
+                                    .fromJson(tokenData, com.google.gson.JsonObject.class);
+                            if (json.has("refreshToken")) {
+                                refreshToken = json.get("refreshToken").getAsString();
+                                SharedIAS.LOG.info("Extracted refresh token from pasted JSON.");
+                            }
+                        } catch (Throwable ignored) {
+                            // Not valid JSON, fall through
+                        }
+                    }
 
-                    String accessToken = json.get("accessToken").getAsString();
-                    String refreshToken = json.get("refreshToken").getAsString();
-                    String name = json.get("name").getAsString();
-                    UUID uuid = UUID.fromString(json.get("uuid").getAsString());
+                    // If not JSON or no refresh token found, treat as raw refresh token
+                    if (refreshToken == null) {
+                        refreshToken = tokenData;
+                    }
 
-                    MicrosoftAccount account = new MicrosoftAccount(name, accessToken, refreshToken, uuid);
-                    SharedIAS.LOG.info("Perm token imported for: " + name);
+                    // Use custom client ID if provided
+                    final String clientId = clientIdField.getText().trim().isEmpty()
+                            ? Auth.CLIENT_ID
+                            : clientIdField.getText().trim();
+
+                    // Run the full auth chain
+                    state = "Refreshing token...";
+                    Map.Entry<String, String> authRefreshTokens = Auth.refreshToken(refreshToken, clientId);
+                    String newRefreshToken = authRefreshTokens.getValue();
+
+                    state = "Authenticating with XBL...";
+                    String xblToken = Auth.authXBL(authRefreshTokens.getKey());
+
+                    state = "Authenticating with XSTS...";
+                    Map.Entry<String, String> xstsTokenUserhash = Auth.authXSTS(xblToken);
+
+                    state = "Getting Minecraft token...";
+                    String accessToken = Auth.authMinecraft(xstsTokenUserhash.getValue(), xstsTokenUserhash.getKey());
+
+                    state = "Getting profile...";
+                    Map.Entry<UUID, String> profile = Auth.getProfile(accessToken);
+
+                    MicrosoftAccount account = new MicrosoftAccount(
+                            profile.getValue(),
+                            accessToken,
+                            newRefreshToken,
+                            profile.getKey()
+                    );
+                    SharedIAS.LOG.info("Perm/refresh token imported for: " + profile.getValue());
 
                     mc.addScheduledTask(() -> {
                         handler.accept(account);
                         mc.displayGuiScreen(new IASAlertScreen(
                                 () -> mc.displayGuiScreen(prev),
-                                TextFormatting.GREEN + "Perm Token Imported!",
-                                "Account '" + name + "' imported successfully!\n" +
-                                        "Click Login to authenticate.\n \n" +
-                                        TextFormatting.YELLOW + "Note: " + TextFormatting.RESET +
-                                        "The sender's account is NOT affected."));
+                                TextFormatting.GREEN + "Account Imported!",
+                                "Account '" + profile.getValue() + "' imported successfully!\n" +
+                                        "Click Login to authenticate."));
                     });
 
                 } catch (Throwable t) {
-                    SharedIAS.LOG.error("Unable to import perm token.", t);
+                    SharedIAS.LOG.error("Unable to import perm/refresh token.", t);
                     String msg = t.getMessage() != null ? t.getMessage() : t.getClass().getSimpleName();
                     mc.addScheduledTask(() -> mc.displayGuiScreen(new IASAlertScreen(
                             () -> mc.displayGuiScreen(this),
-                            TextFormatting.RED + "Perm Token Import Failed",
+                            TextFormatting.RED + "Import Failed",
                             "Error: " + msg + "\n\n" +
-                                    "Make sure you copied using 'Copy Perm Token'\n" +
-                                    "and pasted the entire text block.")));
+                                    "Accepts either:\n" +
+                                    "- Raw refresh token (starts with M.)\n" +
+                                    "- Full JSON from 'Copy Perm Token'\n\n" +
+                                    "If the token came from another app,\n" +
+                                    "set the correct Client ID.")));
                     state = null;
                 }
             });
         },
-                TextFormatting.RED + "WARNING: Perm Token (Full Account Data)",
+                TextFormatting.RED + "WARNING: Perm Token / Refresh Token",
                 "This grants permanent account access.\n" +
                         "Only import from sources you FULLY trust!\n" +
                         "Are you sure you want to continue?", 0));
