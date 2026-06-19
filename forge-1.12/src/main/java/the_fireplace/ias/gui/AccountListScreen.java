@@ -40,6 +40,8 @@ public class AccountListScreen extends GuiScreen {
     private GuiButton reloadSkins;
     private GuiButton copyTempToken;
     private GuiButton copyPermToken;
+    private GuiButton changeName;
+    private GuiButton changeSkin;
     private GuiButton cancel;
     private GuiTextField search;
     private String state;
@@ -58,18 +60,20 @@ public class AccountListScreen extends GuiScreen {
         // Search bar
         search = new GuiTextField(1, this.fontRenderer, this.width / 2 - 80, 14, 160, 16);
 
-        // Button layout - 3 rows of 3 at the bottom:
-        // Row 1: Login          | Edit   | Add
-        // Row 2: Login (Offline)| Delete | Copy Temp Token
-        // Row 3: Copy Perm Token|  gap   | Cancel
+        // Button layout - 4 rows of 3 at the bottom:
+        // Row 1: Login          | Edit         | Add
+        // Row 2: Login (Offline)| Delete       | Copy Temp Token
+        // Row 3: Change Name   | Change Skin  | Copy Perm Token
+        // Row 4:               |              | Cancel
 
         int col1 = this.width / 2 - 154;
         int col2 = this.width / 2 - 47;
         int col3 = this.width / 2 + 60;
         int btnW = 100;
-        int row1 = this.height - 76;
-        int row2 = this.height - 52;
-        int row3 = this.height - 28;
+        int row1 = this.height - 100;
+        int row2 = this.height - 76;
+        int row3 = this.height - 52;
+        int row4 = this.height - 28;
 
         addButton(login = new GuiButton(3, col1, row1, btnW, 20,
                 I18n.format("ias.listGui.login")));
@@ -85,9 +89,14 @@ public class AccountListScreen extends GuiScreen {
         addButton(copyTempToken = new GuiButton(8, col3, row2, btnW, 20,
                 "Copy Temp Token"));
 
-        addButton(copyPermToken = new GuiButton(9, col1, row3, btnW + 30, 20,
-                TextFormatting.RED + "Copy Perm Token"));
-        addButton(cancel = new GuiButton(7, col3, row3, btnW, 20,
+        addButton(changeName = new GuiButton(10, col1, row3, btnW, 20,
+                "Change Name"));
+        addButton(changeSkin = new GuiButton(11, col2, row3, btnW, 20,
+                "Skin & Cape"));
+        addButton(copyPermToken = new GuiButton(9, col3, row3, btnW, 20,
+                TextFormatting.RED + "Perm Token"));
+
+        addButton(cancel = new GuiButton(7, col3, row4, btnW, 20,
                 I18n.format("gui.cancel")));
 
         updateButtons();
@@ -115,6 +124,8 @@ public class AccountListScreen extends GuiScreen {
         else if (button.id == 7) mc.displayGuiScreen(prev);
         else if (button.id == 8) copyTempToken();
         else if (button.id == 9) copyPermToken();
+        else if (button.id == 10) changeName();
+        else if (button.id == 11) changeSkin();
         super.actionPerformed(button);
     }
 
@@ -392,18 +403,55 @@ public class AccountListScreen extends GuiScreen {
                 "This gives PERMANENT account access. Proceed?", 0));
     }
 
+    private void changeName() {
+        if (list.selectedElement() < 0 || state != null) return;
+        Account acc = list.entries.get(list.selectedElement()).account();
+        if (!(acc instanceof MicrosoftAccount) && !(acc instanceof TokenAccount)) {
+            mc.displayGuiScreen(new IASAlertScreen(() -> mc.displayGuiScreen(this),
+                    TextFormatting.YELLOW + "Not Supported",
+                    "Name changing requires a Microsoft or Token account."));
+            return;
+        }
+        mc.displayGuiScreen(new ChangeNameScreen(this, acc, () -> {
+            Config.save(mc.gameDir.toPath());
+            list.updateAccounts(search.getText());
+        }));
+    }
+
+    private void changeSkin() {
+        if (list.selectedElement() < 0 || state != null) return;
+        Account acc = list.entries.get(list.selectedElement()).account();
+        if (!(acc instanceof MicrosoftAccount) && !(acc instanceof TokenAccount)) {
+            mc.displayGuiScreen(new IASAlertScreen(() -> mc.displayGuiScreen(this),
+                    TextFormatting.YELLOW + "Not Supported",
+                    "Skin & cape changing requires a Microsoft or Token account."));
+            return;
+        }
+        mc.displayGuiScreen(new ChangeSkinScreen(this, acc, () -> {
+            IAS.SKIN_CACHE.clear();
+            Config.save(mc.gameDir.toPath());
+            list.updateAccounts(search.getText());
+        }));
+    }
+
     private void updateButtons() {
-        login.enabled = list.selectedElement() >= 0 && state == null;
-        loginOffline.enabled = list.selectedElement() >= 0;
+        boolean selected = list.selectedElement() >= 0;
+        boolean hasToken = selected && (
+                list.entries.get(list.selectedElement()).account() instanceof MicrosoftAccount ||
+                list.entries.get(list.selectedElement()).account() instanceof TokenAccount);
+        boolean isMicrosoft = selected &&
+                list.entries.get(list.selectedElement()).account() instanceof MicrosoftAccount;
+        login.enabled = selected && state == null;
+        loginOffline.enabled = selected;
         add.enabled = state == null;
-        edit.enabled = list.selectedElement() >= 0 && state == null;
-        delete.enabled = list.selectedElement() >= 0 && state == null;
+        edit.enabled = selected && state == null;
+        delete.enabled = selected && state == null;
         reloadSkins.enabled = !list.entries.isEmpty() && state == null &&
                 System.currentTimeMillis() > nextSkinUpdate;
-        copyTempToken.enabled = list.selectedElement() >= 0 && state == null;
-        // Only Microsoft accounts have refresh/perm tokens
-        copyPermToken.enabled = list.selectedElement() >= 0 && state == null &&
-                list.entries.get(list.selectedElement()).account() instanceof MicrosoftAccount;
+        copyTempToken.enabled = selected && state == null;
+        copyPermToken.enabled = isMicrosoft && state == null;
+        changeName.enabled = hasToken && state == null;
+        changeSkin.enabled = hasToken && state == null;
     }
 
     @Override

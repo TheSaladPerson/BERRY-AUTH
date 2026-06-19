@@ -9,5 +9,3 @@ pluginManagement {
 rootProject.name = 'In-Game Account Switcher'
 include 'shared'
 include 'forge-1.12'
-// include 'forge-1.8'
-// include 'forge-1.7'
